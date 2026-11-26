@@ -1,0 +1,8 @@
+# Only the website and its README are published. Splitwise exports and
+# anything built from them stay on this computer.
+/*
+!/.gitignore
+!/README.md
+!/docs/
+*.csv
+*.json

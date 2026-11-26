@@ -1,0 +1,1277 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Flat Setup Ledger</title>
+<meta name="description" content="Search a Splitwise flat export, see what was bought for the flat, and work out a fair move-out buyout. Runs entirely in your browser.">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' rx='7' fill='%232f6f5e'/><path d='M8 23V12l8-5 8 5v11h-5v-6h-6v6z' fill='white'/></svg>">
+<style>
+:root {
+  color-scheme: light;
+  --font-anthropic-sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --font-anthropic-serif: ui-serif, Georgia, "Times New Roman", serif;
+  --cds-gap-xs: 4px; --cds-gap-sm: 8px; --cds-gap-md: 14px; --cds-gap-lg: 20px; --cds-gap-xl: 36px;
+  --cds-pad-lg: 16px; --cds-radius: 8px;
+  --cds-font-size-title: 30px; --cds-font-size-heading: 21px; --cds-font-size-body: 15px; --cds-font-size-caption: 13px;
+  --cds-font-weight-medium: 600;
+  --color-bg: #faf9f6; --color-panel: #ffffff; --color-fg: #1d1d1b; --color-fg-muted: #66645e; --color-border-line: #e3e0d8;
+  --color-ok: #2f7a4f; --color-bad: #b4442f; --color-warn: #a86a12;
+  --chart-1: #2f6f5e; --chart-2: #c27a2c; --chart-3: #5b6fb3; --cds-chart-muted: #dcdcd2;
+  --cds-text-secondary: var(--color-fg-muted); --cds-surface-popover: var(--color-panel); --cds-border: var(--color-border-line);
+  --cds-shadow-popover: 0 6px 20px rgba(0,0,0,.12);
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    color-scheme: dark;
+    --color-bg: #191917; --color-panel: #23231f; --color-fg: #ecebe6; --color-fg-muted: #a5a39b; --color-border-line: #3a3934;
+    --color-ok: #6cc28f; --color-bad: #ee8a74; --color-warn: #e0a54d;
+    --chart-1: #5fb39b; --chart-2: #e09c50; --chart-3: #8b9de0; --cds-chart-muted: #3d3d37;
+    --cds-shadow-popover: 0 6px 20px rgba(0,0,0,.5);
+  }
+}
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --color-bg: #191917; --color-panel: #23231f; --color-fg: #ecebe6; --color-fg-muted: #a5a39b; --color-border-line: #3a3934;
+  --color-ok: #6cc28f; --color-bad: #ee8a74; --color-warn: #e0a54d;
+  --chart-1: #5fb39b; --chart-2: #e09c50; --chart-3: #8b9de0; --cds-chart-muted: #3d3d37;
+  --cds-shadow-popover: 0 6px 20px rgba(0,0,0,.5);
+}
+* { box-sizing: border-box; }
+html { -webkit-text-size-adjust: 100%; }
+body { margin: 0; background: var(--color-bg); color: var(--color-fg); font-family: var(--font-anthropic-sans); font-size: var(--cds-font-size-body); }
+main { max-width: 1180px; margin: 0 auto; padding: 32px 16px 64px; }
+.dash-select { font: inherit; font-size: var(--cds-font-size-body); color: var(--color-fg); background-color: var(--color-bg); border: 1px solid var(--color-border-line); border-radius: var(--cds-radius); padding: 6px 10px; max-width: 100%; }
+input[type="file"] { font: inherit; font-size: var(--cds-font-size-caption); color: var(--color-fg); max-width: 100%; }
+.dash-skeleton { opacity: .4; }
+[hidden] { display: none !important; }
+.site-foot { margin-top: 48px; font-size: var(--cds-font-size-caption); color: var(--color-fg-muted); }
+.site-foot a { color: inherit; }
+@media (max-width: 600px) { :root { --cds-font-size-title: 25px; --cds-gap-xl: 28px; } }
+.b71 { display: flex; flex-direction: column; gap: var(--cds-gap-xl); font-family: var(--font-anthropic-sans); color: var(--color-fg); }
+.b71 h1 { font-family: var(--font-anthropic-serif); font-weight: 400; font-size: var(--cds-font-size-title); margin: 0; text-wrap: balance; }
+.b71 h2 { font-size: var(--cds-font-size-heading); font-weight: var(--cds-font-weight-medium); margin: 0; text-wrap: balance; }
+.b71 h3 { font-size: var(--cds-font-size-body); font-weight: var(--cds-font-weight-medium); margin: 0; }
+.b71 p { margin: 0; max-width: 72ch; line-height: 1.55; }
+.b71-muted { color: var(--color-fg-muted); }
+.b71-small { font-size: var(--cds-font-size-caption); }
+.b71-head { display: flex; flex-direction: column; gap: var(--cds-gap-sm); }
+.b71-section { display: flex; flex-direction: column; gap: var(--cds-gap-md); }
+.b71-tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: var(--cds-gap-md); }
+.b71-tile { background: var(--color-panel); border: 1px solid var(--color-border-line); border-radius: var(--cds-radius); padding: var(--cds-pad-lg); display: flex; flex-direction: column; gap: var(--cds-gap-xs); min-width: 0; }
+.b71-tile .b71-big { font-family: var(--font-anthropic-serif); font-weight: 400; font-size: var(--cds-font-size-title); font-variant-numeric: tabular-nums; }
+.b71-tile .b71-label { font-size: var(--cds-font-size-caption); color: var(--color-fg-muted); letter-spacing: .02em; }
+.b71-controls { display: flex; flex-wrap: wrap; gap: var(--cds-gap-md); align-items: flex-end; }
+.b71-controls label { display: flex; flex-direction: column; gap: var(--cds-gap-xs); font-size: var(--cds-font-size-caption); color: var(--color-fg-muted); min-width: 0; }
+.b71-search { font: inherit; font-size: var(--cds-font-size-body); color: var(--color-fg); background-color: var(--color-bg); border: 1px solid var(--color-border-line); border-radius: var(--cds-radius); padding: 6px 10px; min-width: 0; width: 240px; max-width: 100%; }
+.b71-callout { background: var(--color-panel); border: 1px solid var(--color-border-line); border-radius: var(--cds-radius); padding: var(--cds-pad-lg); font-size: var(--cds-font-size-body); line-height: 1.6; }
+.b71-callout b { font-variant-numeric: tabular-nums; }
+.b71-grid2 { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: var(--cds-gap-lg); }
+.b71-grid2 > * { min-width: 0; }
+.b71-card { background: var(--color-panel); border: 1px solid var(--color-border-line); border-radius: var(--cds-radius); padding: var(--cds-pad-lg); display: flex; flex-direction: column; gap: var(--cds-gap-md); min-width: 0; }
+.b71-chart { position: relative; min-height: 180px; }
+.b71-bars { display: flex; flex-direction: column; gap: 6px; }
+.b71-bar { display: grid; grid-template-columns: minmax(90px, 34%) 1fr; gap: var(--cds-gap-sm); align-items: center; cursor: pointer; font-size: var(--cds-font-size-caption); }
+.b71-bar .b71-bl { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.b71-track { position: relative; height: 22px; display: flex; align-items: center; }
+.b71-fill { position: absolute; left: 0; top: 0; bottom: 0; border-radius: 3px; }
+.b71-val { position: relative; padding-left: 6px; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.b71-bar:hover .b71-bl, .b71-bar:focus-visible .b71-bl { text-decoration: underline; }
+.b71-bar:focus-visible { outline: 2px solid var(--color-fg); outline-offset: 2px; }
+.b71-cols { display: flex; align-items: flex-end; gap: 8px; height: 180px; padding-top: 18px; }
+.b71-col { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: flex-end; height: 100%; gap: 4px; cursor: pointer; min-width: 0; font-size: var(--cds-font-size-caption); font-variant-numeric: tabular-nums; }
+.b71-col .b71-colbar { width: 100%; max-width: 56px; border-radius: 3px 3px 0 0; }
+.b71-col .b71-cv { color: var(--cds-text-secondary); white-space: nowrap; font-size: 11px; }
+.b71-tip { position: absolute; pointer-events: none; background: var(--cds-surface-popover); border: 1px solid var(--cds-border); box-shadow: var(--cds-shadow-popover); border-radius: var(--cds-radius); padding: 6px 10px; font-size: var(--cds-font-size-caption); z-index: 5; max-width: 260px; }
+.b71-tip span { color: var(--cds-text-secondary); }
+.b71-tablewrap { overflow-x: auto; border: 1px solid var(--color-border-line); border-radius: var(--cds-radius); }
+.b71-table { width: 100%; border-collapse: collapse; font-size: var(--cds-font-size-caption); font-variant-numeric: tabular-nums; }
+.b71-table th, .b71-table td { padding: 7px 10px; text-align: left; border-bottom: 1px solid var(--color-border-line); vertical-align: top; }
+.b71-table th { font-weight: var(--cds-font-weight-medium); color: var(--color-fg-muted); background: var(--color-panel); position: sticky; top: 0; white-space: nowrap; }
+.b71-table td.n, .b71-table th.n { text-align: right; white-space: nowrap; }
+.b71-table tbody tr:last-child td { border-bottom: 0; }
+.b71-table td.desc { min-width: 160px; }
+.b71-sortbtn { font: inherit; color: inherit; background: none; border: 0; padding: 0; cursor: pointer; }
+.b71-sortbtn:hover { color: var(--color-fg); text-decoration: underline; }
+.b71-pill { display: inline-block; padding: 1px 7px; border-radius: 999px; font-size: 11px; border: 1px solid var(--color-border-line); white-space: nowrap; }
+.b71-pill.check { color: var(--color-warn); border-color: currentColor; }
+.b71-pill.sure { color: var(--color-ok); border-color: currentColor; }
+.b71-pill.edited { color: var(--color-fg-muted); }
+.b71-note { color: var(--color-fg-muted); display: block; margin-top: 2px; }
+.b71-more { font: inherit; font-size: var(--cds-font-size-caption); color: var(--color-fg); background: var(--color-panel); border: 1px solid var(--color-border-line); border-radius: var(--cds-radius); padding: 6px 14px; cursor: pointer; align-self: flex-start; }
+.b71-unsaved { color: var(--color-bad); font-size: var(--cds-font-size-caption); }
+.b71-pos { color: var(--color-ok); }
+.b71-neg { color: var(--color-bad); }
+.b71 details summary { cursor: pointer; font-weight: var(--cds-font-weight-medium); }
+.b71 details p { margin-top: var(--cds-gap-sm); }
+.b71-table tfoot td { font-weight: var(--cds-font-weight-medium); border-top: 1px solid var(--color-border-line); border-bottom: 0; background: var(--color-panel); }
+.b71-msg { font: inherit; font-size: var(--cds-font-size-caption); line-height: 1.5; color: var(--color-fg); background-color: var(--color-bg); border: 1px solid var(--color-border-line); border-radius: var(--cds-radius); padding: 10px; width: 100%; min-height: 150px; box-sizing: border-box; resize: vertical; }
+
+</style>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/d3/7.9.0/d3.min.js"></script>
+<script src="dash.js"></script>
+<script>
+// What this page keeps, all in this browser's localStorage.
+window.b71 = window.b71 || {};
+b71.firstMember = () => {
+  const m = dash.data('members');
+  const cur = (m.data || []).find((x) => x.current) || (m.data || [])[0];
+  return cur ? cur.member : '';
+};
+b71.store = (() => {
+  const K = { file: 'ledger.file', name: 'ledger.name', edits: 'ledger.edits', asof: 'ledger.asof' };
+  const get = (k) => { try { return localStorage.getItem(k); } catch (e) { return null; } };
+  const set = (k, v) => { try { localStorage.setItem(k, v); return true; } catch (e) { return false; } };
+  const del = (k) => { try { localStorage.removeItem(k); } catch (e) {} };
+  // Starting edits for the B-71 export these rules were written for: the AC install and the
+  // move-in Amazon orders are left out of the setup items. They match no rows in other exports.
+  const START = { 'e20211128-1kn0fo0': false, 'e20211130-kobs1v': false, 'e20211130-12sg361': false, 'e20240908-4z042j': false, 'e20240909-j4a9zk': false };
+  const edits = () => { try { return { ...START, ...JSON.parse(get(K.edits) || '{}') }; } catch (e) { return { ...START }; } };
+  return {
+    file: () => { const text = get(K.file); return text ? { text, name: get(K.name) || '' } : null; },
+    setFile: (text, name) => set(K.file, text) && set(K.name, name || ''),
+    clearFile: () => { del(K.file); del(K.name); },
+    overrides: () => Object.entries(edits()).map(([id, setup]) => ({ id, setup })),
+    setOverride: (id, setup) => {
+      const all = edits(); all[id] = setup;
+      const ok = set(K.edits, JSON.stringify(all));
+      dash.setRows('overrides', Object.entries(all).map(([i, v]) => ({ id: i, setup: v })));
+      return ok;
+    },
+    asof: () => get(K.asof),
+    setAsof: (v) => set(K.asof, v),
+  };
+})();
+</script>
+</head>
+<body>
+<main>
+
+<div class="b71">
+  <header class="b71-head" id="top">
+    <h1>Flat Ledger</h1>
+    <p data-needs-data hidden><span data-draw="k_total" data-source="kpis" data-field="total_spend" data-row="0">—</span> spent over <span data-draw="k_count" data-source="kpis" data-field="expenses" data-row="0">—</span> shared expenses between <span data-draw="k_first" data-source="kpis" data-field="first_date" data-row="0">—</span> and <span data-draw="k_last" data-source="kpis" data-field="last_date" data-row="0">—</span>, not counting settle-ups. <span data-draw="k_setup" data-source="kpis" data-field="setup_cost" data-row="0">—</span> of it went on <span data-draw="k_setup_n" data-source="kpis" data-field="setup_items" data-row="0">—</span> setup items that stay with the flat.</p>
+  </header>
+
+  <div class="b71-card" id="data-file">
+    <p class="b71-small" id="b71-has-data" hidden>Data: <b id="b71-file-name">the Splitwise export</b>, <b data-draw="k_rows" data-source="kpis" data-field="rows" data-row="0">—</b> entries up to <b data-draw="k_last3" data-source="kpis" data-field="last_entry" data-row="0">—</b>. It stays in this browser: nothing is uploaded anywhere.</p>
+    <p id="b71-no-data">Pick your flat’s Splitwise export to see the dashboard. In Splitwise, open the group, choose <b>Export as spreadsheet</b>, then pick that .csv file here. The file is read in this browser and never leaves your computer.</p>
+    <div class="b71-controls">
+      <label for="b71-file">Splitwise group export (.csv)
+        <input type="file" id="b71-file" accept=".csv,text/csv">
+      </label>
+      <button type="button" class="b71-more" id="b71-forget" hidden>Forget this file</button>
+    </div>
+    <p class="b71-small b71-pos" id="b71-up-done" hidden>Loaded. Tags you changed by hand are kept.</p>
+    <p class="b71-small b71-neg" id="b71-up-bad" hidden>That file isn’t a Splitwise group export. Its first line should start with Date, Description, Category, Cost, Currency.</p>
+    <p class="b71-small b71-muted" id="b71-up-fail" hidden>Loaded, but this browser wouldn’t keep a copy, so you’ll need to pick the file again next time.</p>
+  </div>
+
+  <section class="b71-section" id="setup" data-needs-data hidden>
+    <h2>Setup items to rotate</h2>
+    <p class="b71-muted">Things bought for the flat that last: appliances, cookware, crockery, storage, fixtures, keys. When someone moves out, the person who replaces them usually buys out their share. Items marked <span class="b71-pill check">check</span> are judgement calls, such as the move-in Amazon orders whose contents Splitwise doesn't list.</p>
+    <div class="b71-controls">
+      <label for="b71-leaver">Who is moving out
+        <select id="b71-leaver" class="dash-select" data-draw="leaver_opts" data-source="members"></select>
+      </label>
+      <label for="b71-dep">Value items at
+        <select id="b71-dep" class="dash-select">
+          <option value="0">Purchase price</option>
+          <option value="3">Straight-line over 3 years</option>
+          <option value="5">Straight-line over 5 years</option>
+          <option value="8">Straight-line over 8 years</option>
+        </select>
+      </label>
+      <label for="b71-basis">How shares are counted
+        <select id="b71-basis" class="dash-select">
+          <option value="seat">By seat: leavers were bought out</option>
+          <option value="split">By the original Splitwise split</option>
+        </select>
+      </label>
+      <label for="b71-check">Items marked “check”
+        <select id="b71-check" class="dash-select">
+          <option value="yes">Included</option>
+          <option value="no">Left out</option>
+        </select>
+      </label>
+    </div>
+
+    <p class="b71-callout" id="buyout"><b data-draw="leaver_name">—</b>’s share of the setup items is <b data-draw="s_leaver_value" data-source="setup_summary" data-field="leaver_value" data-row="0">—</b> at the chosen valuation, out of <b data-draw="s_leaver_cost" data-source="setup_summary" data-field="leaver_cost" data-row="0">—</b> at purchase price. That is the amount the incoming flatmate would pay them to take over their share.</p>
+    <p class="b71-small b71-muted">“By seat” follows how the flat has worked: each person who moved out was paid for their share in cash by whoever replaced them, so every current flatmate holds an equal part of anything the whole flat split. Items split between only some people stay with those people. “By the original Splitwise split” counts only what each person was charged when the item was bought.</p>
+
+    <div class="b71-tiles">
+      <div class="b71-tile" id="tile-items"><span class="b71-label">Setup items</span><span class="b71-big" data-draw="s_items" data-source="setup_summary" data-field="items" data-row="0">—</span></div>
+      <div class="b71-tile" id="tile-cost"><span class="b71-label">Cost at purchase</span><span class="b71-big" data-draw="s_cost" data-source="setup_summary" data-field="cost" data-row="0">—</span></div>
+      <div class="b71-tile" id="tile-value"><span class="b71-label">Value at chosen valuation</span><span class="b71-big" data-draw="s_value" data-source="setup_summary" data-field="value_now" data-row="0">—</span></div>
+    </div>
+
+    <div class="b71-grid2">
+      <div class="b71-card" id="setup-groups">
+        <h3>By type of item</h3>
+        <p class="b71-small b71-muted">Full bar is the purchase price, the darker part is what it’s worth at the chosen valuation.</p>
+        <div class="b71-chart" data-draw="setup_groups_chart" data-source="setup_groups"></div>
+      </div>
+      <div class="b71-card" id="contributors">
+        <h3>Who owns a share of the setup items</h3>
+        <p class="b71-small b71-muted">Each item was split between the flatmates of the time, and each settled their part. This is each person’s share of those splits, not who paid the bill upfront.</p>
+        <div class="b71-tablewrap">
+          <table class="b71-table" data-source="contributors" data-row-key="member">
+            <thead><tr><th data-field="member">Member</th><th data-field="status">Status</th><th class="n" data-field="items">Items</th><th class="n" data-field="share_cost">At purchase</th><th class="n" data-field="share_value">At valuation</th></tr></thead>
+            <tbody data-draw="contrib_rows"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <h3>Every setup item</h3>
+    <p class="b71-small b71-muted">Untick “Setup” to drop an item, or tick it on any row in the expense list below to add one. Changes are kept in this browser.</p>
+    <p class="b71-unsaved" hidden>That change wasn’t saved: this browser won’t let the page store it.</p>
+    <div class="b71-tablewrap">
+      <table class="b71-table" data-source="setup_items" data-row-key="id">
+        <thead><tr>
+          <th data-field="date">Date</th><th data-field="description">Item</th><th data-field="asset_group">Type</th><th data-field="shared_by">Split between</th>
+          <th class="n" data-field="cost">Cost</th><th class="n" data-field="age_years">Age (yrs)</th><th class="n" data-field="value_now">Value now</th>
+          <th class="n" data-field="leaver_share">Leaver’s share</th><th class="n" data-field="leaver_value">Leaver’s share now</th><th data-field="confidence">Flag</th><th>Setup</th>
+        </tr></thead>
+        <tbody data-draw="setup_rows"></tbody>
+      </table>
+    </div>
+  </section>
+
+  <section class="b71-section" id="statement" data-needs-data hidden>
+    <h2>Move-out statement for <span data-draw="stmt_name">—</span></h2>
+    <p class="b71-muted">Every setup item the leaving flatmate had a share in, what that share is worth now, and who pays it to them. It follows the choices in the setup section above: who is moving out, how items are valued, and whether “check” items count.</p>
+    <div class="b71-controls">
+      <label for="b71-payer">Who takes over the share
+        <select id="b71-payer" class="dash-select">
+          <option value="incoming">The incoming flatmate</option>
+          <option value="stay">The people staying, equally</option>
+        </select>
+      </label>
+      <label for="b71-asof">Value as of (move-out date)
+        <input type="date" id="b71-asof" class="b71-search" min="2021-11-01" max="2035-12-31" style="width:auto">
+      </label>
+      <button type="button" class="b71-more" id="b71-asof-save" hidden>Save as my move-out date</button>
+    </div>
+    <p class="b71-small b71-muted">Saved move-out date: <b data-draw="mo_saved" data-source="move_out" data-field="saved" data-row="0">—</b>. Picking another date changes the figures; saving keeps it in this browser.</p>
+    <p class="b71-small b71-neg" id="b71-asof-fail" hidden>That date wasn’t saved: this browser won’t let the page store it.</p>
+    <div class="b71-tiles">
+      <div class="b71-tile" id="stmt-tile-items"><span class="b71-label">Items they share in</span><span class="b71-big" data-draw="st_items" data-source="statement_summary" data-field="items" data-row="0">—</span></div>
+      <div class="b71-tile" id="stmt-tile-paid"><span class="b71-label">Their share at purchase</span><span class="b71-big" data-draw="st_paid" data-source="statement_summary" data-field="share_cost" data-row="0">—</span></div>
+      <div class="b71-tile" id="stmt-tile-due"><span class="b71-label">Buyout due to them</span><span class="b71-big" data-draw="st_due" data-source="statement_summary" data-field="buyout" data-row="0">—</span></div>
+      <div class="b71-tile" id="stmt-tile-bal"><span class="b71-label">Splitwise balance (settle separately)</span><span class="b71-big" data-draw="st_bal" data-source="statement_summary" data-field="splitwise_balance" data-row="0">—</span></div>
+    </div>
+    <div class="b71-grid2">
+      <div class="b71-card" id="stmt-years">
+        <h3>By year bought</h3>
+        <p class="b71-small b71-muted">Each item loses value from the day it was bought, so older purchases are worth less of the buyout.</p>
+        <div class="b71-tablewrap">
+          <table class="b71-table" data-source="statement_years" data-row-key="year">
+            <thead><tr><th data-field="year">Year</th><th class="n" data-field="items">Items</th><th class="n" data-field="share">Their share</th><th class="n" data-field="pct_left">Value left</th><th class="n" data-field="buyout">Buyout</th></tr></thead>
+            <tbody data-draw="stmt_year_rows"></tbody>
+          </table>
+        </div>
+      </div>
+      <div class="b71-card" id="stmt-pay">
+        <h3>Who pays what</h3>
+        <div class="b71-tablewrap">
+          <table class="b71-table" data-source="statement_payers" data-row-key="payer">
+            <thead><tr><th data-field="payer">Pays</th><th class="n" data-field="amount">Amount</th></tr></thead>
+            <tbody data-draw="stmt_pay_rows"></tbody>
+          </table>
+        </div>
+        <p class="b71-small b71-muted">The Splitwise balance is for everyday expenses and is settled in Splitwise as usual. It is not part of the buyout.</p>
+      </div>
+      <div class="b71-card" id="stmt-msg">
+        <h3>Message for the flat group</h3>
+        <p class="b71-small b71-muted">Select the text and copy it.</p>
+        <textarea class="b71-msg" readonly data-draw="stmt_message" aria-label="Move-out statement as text"></textarea>
+      </div>
+    </div>
+    <div class="b71-tablewrap">
+      <table class="b71-table" data-source="statement_items" data-row-key="id">
+        <thead><tr>
+          <th data-field="date">Date</th><th data-field="description">Item</th><th data-field="asset_group">Type</th>
+          <th class="n" data-field="cost">Cost</th><th class="n" data-field="share">Their share</th><th class="n" data-field="share_pct">Share %</th><th class="n" data-field="age_years">Age (yrs)</th><th class="n" data-field="pct_left">Value left</th>
+          <th class="n" data-field="value_now">Item worth now</th><th class="n" data-field="buyout">Buyout</th><th data-field="confidence">Flag</th>
+        </tr></thead>
+        <tbody data-draw="stmt_rows"></tbody>
+        <tfoot data-draw="stmt_foot"></tfoot>
+      </table>
+    </div>
+  </section>
+
+  <section class="b71-section" id="spending" data-needs-data hidden>
+    <h2>Where the money went</h2>
+    <p class="b71-muted">All shared spending excluding settle-ups and payments between flatmates. Click a bar to filter the expense list.</p>
+    <div class="b71-grid2">
+      <div class="b71-card" id="by-category">
+        <h3>By category</h3>
+        <div class="b71-chart" data-draw="groups_chart" data-source="spend_groups"></div>
+      </div>
+      <div class="b71-card" id="by-year">
+        <h3>By year</h3>
+        <p class="b71-small b71-muted">The first and last years are partial: the export runs from <span data-draw="k_first2" data-source="kpis" data-field="first_date" data-row="0">—</span> to <span data-draw="k_last2" data-source="kpis" data-field="last_date" data-row="0">—</span>.</p>
+        <div class="b71-chart" data-draw="years_chart" data-source="spend_years"></div>
+      </div>
+    </div>
+    <div class="b71-card" id="balances">
+      <h3>Balances after the last entry, <span data-draw="k_last4" data-source="kpis" data-field="last_entry" data-row="0">—</span></h3>
+      <p class="b71-small b71-muted">From Splitwise’s running totals. Positive means the group owes this person; negative means they owe the group.</p>
+      <div class="b71-tablewrap">
+        <table class="b71-table" data-source="balances" data-row-key="member">
+          <thead><tr><th data-field="member">Member</th><th class="n" data-field="balance">Balance</th></tr></thead>
+          <tbody data-draw="balance_rows"></tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+
+  <section class="b71-section" id="expenses" data-needs-data hidden>
+    <h2>All expenses</h2>
+    <div class="b71-controls">
+      <label for="b71-q">Search
+        <input id="b71-q" class="b71-search" type="search" placeholder="cooker, tawa, cylinder…" autocomplete="off">
+      </label>
+      <label for="b71-grp">Category
+        <select id="b71-grp" class="dash-select">
+          <option value="">All categories</option>
+          <option>Setup assets</option>
+          <option>Groceries &amp; milk</option>
+          <option>Utilities</option>
+          <option>Staff</option>
+          <option>Leisure</option>
+          <option>Household consumables</option>
+          <option>Repairs &amp; maintenance</option>
+          <option>Cleaning &amp; laundry services</option>
+          <option>Health &amp; personal</option>
+          <option>Other</option>
+          <option>Transfers &amp; settlements</option>
+        </select>
+      </label>
+      <label for="b71-yr">Year
+        <select id="b71-yr" class="dash-select" data-draw="yr_opts" data-source="spend_years"></select>
+      </label>
+      <label for="b71-who">Involving
+        <select id="b71-who" class="dash-select" data-draw="who_opts" data-source="members"></select>
+      </label>
+      <label for="b71-setupf">Setup
+        <select id="b71-setupf" class="dash-select">
+          <option value="">All rows</option>
+          <option value="yes">Setup items only</option>
+          <option value="no">Everything else</option>
+        </select>
+      </label>
+      <label for="b71-tr">Settle-ups
+        <select id="b71-tr" class="dash-select">
+          <option value="hide">Hidden</option>
+          <option value="show">Shown</option>
+        </select>
+      </label>
+      <button type="button" class="b71-more" id="b71-reset">Clear filters</button>
+    </div>
+
+    <div class="b71-tiles">
+      <div class="b71-tile" id="tile-x-count"><span class="b71-label">Matching expenses</span><span class="b71-big" data-draw="x_count" data-source="explorer_total" data-field="count" data-row="0">—</span></div>
+      <div class="b71-tile" id="tile-x-cost"><span class="b71-label">Total cost</span><span class="b71-big" data-draw="x_cost" data-source="explorer_total" data-field="cost" data-row="0">—</span></div>
+      <div class="b71-tile" id="tile-x-share"><span class="b71-label">Share of the person picked under “Involving”</span><span class="b71-big" data-draw="x_share" data-source="explorer_total" data-field="share" data-row="0">—</span></div>
+    </div>
+
+    <p class="b71-unsaved" hidden>That change wasn’t saved: this browser won’t let the page store it.</p>
+    <div class="b71-tablewrap">
+      <table class="b71-table" data-source="explorer" data-row-key="id">
+        <thead><tr>
+          <th data-field="date"><button type="button" class="b71-sortbtn" data-sort="date">Date ↕</button></th>
+          <th data-field="description">Description</th>
+          <th data-field="category">Category</th>
+          <th data-field="paid_by">Paid by</th>
+          <th class="n" data-field="cost"><button type="button" class="b71-sortbtn" data-sort="cost">Cost ↕</button></th>
+          <th class="n" data-field="share">Their share</th>
+          <th data-field="setup">Setup</th>
+        </tr></thead>
+        <tbody data-draw="x_rows"></tbody>
+      </table>
+    </div>
+    <p class="b71-small b71-muted">Showing <span data-draw="x_shown">—</span>.</p>
+    <button type="button" class="b71-more" id="b71-showmore">Show 150 more</button>
+  </section>
+
+  <details id="method">
+    <summary>How the categories and shares were worked out</summary>
+    <p>Categories come from rules on each expense’s description and Splitwise category, applied in order: settle-ups and transfers first, then repairs, staff, services, utilities, milk subscriptions, leisure, groceries and household supplies. Setup items were picked by hand from the descriptions up to the 15 Oct 2026 export; in any newer export, entries whose description looks like something bought for the flat (a cooker, a stand, plates) are marked “check” for someone to confirm. The page reads the Splitwise file in your browser; the rules are in the page’s source on GitHub.</p>
+    <p>A person’s share of an expense is what Splitwise says they owe for it. The payer’s share is whatever is left of the cost. Seven expenses had two payers; there the leftover is split equally between them.</p>
+    <p>Straight-line valuation takes the purchase price down evenly to zero over the chosen number of years, counted from the day each item was bought to the move-out date chosen in the statement (today unless changed).</p>
+  </details>
+</div>
+
+<script>
+// ---------- calculations ----------
+dash.loader('ledger', {
+  description: 'Reads the Splitwise group export (CSV): one row per expense or payment, with each member’s net amount; the blank line and the “Total balance” line are skipped.',
+  fn: ({ answer }) => {
+  const text = String(answer || '').replace(/^﻿/, '');
+  const rows = [];
+  let row = [], cell = '', q = false;
+  for (let i = 0; i < text.length; i++) {
+    const ch = text[i];
+    if (q) {
+      if (ch === '"' && text[i + 1] === '"') { cell += '"'; i++; }
+      else if (ch === '"') q = false;
+      else cell += ch;
+    } else if (ch === '"') q = true;
+    else if (ch === ',') { row.push(cell); cell = ''; }
+    else if (ch === '\n' || ch === '\r') {
+      if (ch === '\r' && text[i + 1] === '\n') i++;
+      row.push(cell); rows.push(row); row = []; cell = '';
+    } else cell += ch;
+  }
+  if (cell !== '' || row.length) { row.push(cell); rows.push(row); }
+  const header = rows[0] || [];
+  if (header.slice(0, 5).join(',') !== 'Date,Description,Category,Cost,Currency' || header.length < 6) {
+    throw new Error('This file is not a Splitwise group export: its first line should start "Date,Description,Category,Cost,Currency" followed by one column per member.');
+  }
+  const out = [];
+  for (const r of rows.slice(1)) {
+    if (!r[0] || !/^\d{4}-\d{2}-\d{2}$/.test(r[0]) || (r[1] || '').trim() === 'Total balance') continue;
+    const o = { Date: r[0], Description: r[1], Category: r[2], Cost: Number(r[3]), Currency: r[4] };
+    header.slice(5).forEach((h, k) => { o[h] = Number(r[5 + k] || 0); });
+    out.push(o);
+  }
+  return { columns: header, rows: out };
+},
+});
+
+dash.calc('ledger_rows', {
+  title: 'Expenses, categorised',
+  description: 'Each Splitwise entry with our category, setup flag, who paid, and every member’s share (what Splitwise says they owe; the payer gets what is left of the cost).',
+  inputs: ['ledger'],
+  fn: (ledger) => {
+  const SETUP = [
+    ['2021-11-25', 'House keys (4x)', 'Move-in & keys', 'sure', ''],
+    ['2021-11-28', 'Amazon orders', 'Move-in & keys', 'check', 'Move-in Amazon order; items not listed in Splitwise'],
+    ['2021-11-30', 'Amazon (Will update on returns)', 'Move-in & keys', 'check', 'Move-in Amazon order; items not listed, may include returns'],
+    ['2021-11-30', 'Amazon orders', 'Move-in & keys', 'check', 'Move-in Amazon order; items not listed in Splitwise'],
+    ['2022-01-17', 'bedsheet', 'Move-in & keys', 'check', 'Could be a personal item'],
+    ['2022-07-28', 'cylinder (2nd backup)', 'Move-in & keys', 'check', 'Second gas cylinder; an asset only if it was a new cylinder, not a refill'],
+    ['2022-10-02', 'Duplicate Keys', 'Move-in & keys', 'sure', ''],
+    ['2022-11-14', 'Toaster', 'Kitchen appliances', 'sure', ''],
+    ['2023-05-15', 'Mixer', 'Kitchen appliances', 'sure', ''],
+    ['2023-10-08', 'Spice Grinder', 'Kitchen appliances', 'sure', ''],
+    ['2024-10-26', 'Pressure cooker', 'Kitchen appliances', 'sure', ''],
+    ['2022-01-17', 'Kitchen Scissors', 'Cookware & utensils', 'sure', ''],
+    ['2022-07-09', 'gas lighter', 'Cookware & utensils', 'sure', ''],
+    ['2022-08-01', 'Big basket groceries, utensils, masalas', 'Cookware & utensils', 'check', 'Mixed order: utensils plus groceries'],
+    ['2022-08-11', 'idly makers', 'Cookware & utensils', 'sure', ''],
+    ['2023-10-18', 'steel utensils', 'Cookware & utensils', 'sure', ''],
+    ['2024-01-03', 'Peeler', 'Cookware & utensils', 'sure', ''],
+    ['2024-01-10', 'aprons -amazon', 'Cookware & utensils', 'check', 'Aprons; semi-consumable'],
+    ['2025-09-20', 'appam tawa', 'Cookware & utensils', 'sure', ''],
+    ['2025-12-22', 'amazon - casseroles', 'Cookware & utensils', 'sure', ''],
+    ['2022-04-12', 'fridge water bottles', 'Crockery & bottles', 'sure', ''],
+    ['2022-06-26', 'Mini Dinner set', 'Crockery & bottles', 'sure', ''],
+    ['2023-02-22', 'New cutlery', 'Crockery & bottles', 'sure', ''],
+    ['2023-10-09', 'waterbottles', 'Crockery & bottles', 'sure', ''],
+    ['2023-11-16', 'Borosil bottle', 'Crockery & bottles', 'sure', ''],
+    ['2024-07-29', 'pasta bowls', 'Crockery & bottles', 'sure', ''],
+    ['2024-10-02', 'Plates', 'Crockery & bottles', 'sure', ''],
+    ['2021-12-30', 'ice box', 'Storage & fridge', 'sure', ''],
+    ['2023-07-25', 'kitchen boxes amazon', 'Storage & fridge', 'sure', ''],
+    ['2023-12-18', 'Fridge whiteboard', 'Storage & fridge', 'sure', ''],
+    ['2024-09-23', 'amazon - butter box', 'Storage & fridge', 'sure', ''],
+    ['2025-07-15', 'Grocery storage box', 'Storage & fridge', 'sure', ''],
+    ['2025-08-22', 'LG fridge tray + basket', 'Storage & fridge', 'sure', ''],
+    ['2025-08-25', 'Fridge cover', 'Storage & fridge', 'sure', ''],
+    ['2022-04-11', 'UPS for router', 'Fixtures & electricals', 'sure', ''],
+    ['2022-12-23', 'exhaust fan kitchen', 'Fixtures & electricals', 'sure', ''],
+    ['2022-12-24', 'Socket+MCB', 'Fixtures & electricals', 'check', 'Could count as a repair'],
+    ['2024-09-08', 'glass cutting for AC', 'Fixtures & electricals', 'sure', 'Part of the AC install'],
+    ['2024-09-09', 'AC fitting/installation', 'Fixtures & electricals', 'check', 'Install cost; check whether the AC unit belongs to the flat or one person'],
+    ['2025-06-11', 'bulbs amazon', 'Fixtures & electricals', 'check', 'Bulbs wear out; semi-consumable'],
+    ['2026-06-29', 'kitchen tubelights', 'Fixtures & electricals', 'check', 'Tubelights wear out; semi-consumable'],
+    ['2022-01-15', 'Weighing scale', 'Utility tools', 'sure', ''],
+    ['2025-09-14', 'watering/gardening equipments', 'Utility tools', 'sure', ''],
+    ['2025-12-31', 'amazon - mopstick', 'Utility tools', 'sure', ''],
+    ['2021-12-01', 'Poker chipset', 'Games & bar', 'sure', ''],
+    ['2022-03-29', 'Poker set', 'Games & bar', 'sure', ''],
+    ['2022-10-15', 'Beer pong glasses', 'Games & bar', 'sure', ''],
+    ['2024-02-17', 'Whiskey glasses', 'Games & bar', 'sure', ''],
+  ];
+  // Rows after the hand-reviewed export (15 Oct 2026) are tagged as possible setup items by keyword, for someone to confirm.
+  const REVIEWED_TO = '2026-10-15';
+  const SETUP_WORDS = /cooker|tawa|kadai|kadhai|\bpan\b|\bpans\b|stand|kettle|toaster|mixer|grinder|blender|induction|\biron\b|bucket|\brack\b|shelf|chair|table|mattress|curtain|utensil|knife|knives|scissor|cutlery|plates?\b|bowls?\b|glasses|casserole|container|storage box|dinner set|\bfan\b|extension|\bups\b|weighing|mopstick|lock\b|keys?\b/i;
+  const rx = (p) => new RegExp(p, 'i');
+  const RULES = [
+    ['Transfers & settlements', 'Payment', (d, c) => c === 'Payment'],
+    ['Transfers & settlements', 'Settle-up / transfer', (d, c) => rx('settle|transfer|adjustment|settlement|^kush$').test(d) && !rx('discount').test(d)],
+    ['Repairs & maintenance', 'AC', (d, c) => rx('\\bac\\b').test(d)],
+    ['Repairs & maintenance', 'Repairs', (d, c) => c === 'Maintenance' || rx('repair|mcb|carpenter|toilet pipe|pest control|moving charge|light replacement|tile').test(d)],
+    ['Staff', 'Cook', (d, c) => rx('\\bcook\\b|cook ').test(d)],
+    ['Staff', 'Housekeeping & maid', (d, c) => rx('maid|housekeeping|house cleaning|ashok|kalyan|didi|morning cleaning').test(d)],
+    ['Staff', 'Tips & extras', (d, c) => rx('tips|bartender').test(d)],
+    ['Health & personal', 'Health & personal', (d, c) => c === 'Medical expenses' || rx('pharma|health|haircut').test(d)],
+    ['Cleaning & laundry services', 'Urban Company', (d, c) => rx('\\buc\\b|urban ?c|urbanclap|urbancompany|deep cleaning|tank cleaning').test(d)],
+    ['Cleaning & laundry services', 'Laundry & tailor', (d, c) => rx('fabrico|dry clean|tailor|laundry$').test(d)],
+    ['Utilities', 'Electricity', (d, c) => c === 'Electricity' || rx('e ?-?bill').test(d)],
+    ['Utilities', 'Gas cylinder', (d, c) => (['Heat/gas', 'Gas/fuel'].includes(c) && rx('cylinder|gas').test(d)) || rx('gas refill').test(d)],
+    ['Utilities', 'Internet & phone', (d, c) => rx('jio|wifi|airtel|broadband|internet|recharge mobile').test(d) || (c === 'TV/Phone/Internet' && !rx('milk|country').test(d))],
+    ['Utilities', 'Water', (d, c) => c === 'Water'],
+    ['Utilities', 'Rent', (d, c) => c === 'Rent'],
+    ['Groceries & milk', 'Milk subscriptions', (d, c) => rx('country ?delight|milkbasket|milk basket').test(d)],
+    ['Leisure', 'Smokes & 🍀', (d, c) => rx('cig|mild|esse|🍀|☘️|⚫️|hookah|^#$').test(d) || c === 'Entertainment - Other'],
+    ['Leisure', 'Alcohol', (d, c) => c === 'Liquor' || rx('alc|smirnoff|black label|beer|whisk|vodka|rum\\b').test(d)],
+    ['Leisure', 'Eating out & treats', (d, c) => c === 'Dining out' || rx('pizz|golden dragon|brownie|cake|pastr|thandai|parathe|swiggy pap').test(d)],
+    ['Leisure', 'Games & poker', (d, c) => c === 'Games' || rx('poker').test(d)],
+    ['Leisure', 'Movies & outings', (d, c) => ['Movies', 'Taxi'].includes(c) || rx('movie|ticket|trip|cab|blusmart').test(d)],
+    ['Leisure', 'Gifts & occasions', (d, c) => c === 'Gifts' || rx('gift|farewell|birthday').test(d)],
+    ['Groceries & milk', 'Groceries', (d, c) => ['Groceries', 'Food and drink - Other'].includes(c) || rx('evergreen|evergren|zepto|instamart|blink|dunzo|otip|otipp|paneer|pav\\b|dal\\b|rice|jeera|groc|jiomart|amazon now|fresh terra|elements|peas|capsicum|palak|curd|ketchup|quinoa|safolla|noodles|cashew|biscuit|podi|juice|vyapar|flipkart|swiggy|coal').test(d)],
+    ['Household consumables', 'Cleaning & kitchen supplies', (d, c) => ['Household supplies', 'Cleaning', 'Trash', 'Home - Other'].includes(c) || rx('dish|floor|ariel|detergent|bin bag|dustbin|garbage|tissue|kitchen roll|foil|wrap|mop|all out|handwash|sanitar|supplies|stuff|delivery|amazon').test(d)],
+  ];
+  const classify = (d, c) => { for (const [g, s, t] of RULES) if (t(d, c)) return [g, s]; return ['Other', c || 'Uncategorised']; };
+  const setupMap = new Map(SETUP.map(([dt, ds, grp, conf, note]) => [dt + '|' + ds, [grp, conf, note]]));
+  const r2 = (v) => Math.round(v * 100) / 100;
+  const hash = (s) => { let h = 2166136261; for (let i = 0; i < s.length; i++) { h ^= s.charCodeAt(i); h = Math.imul(h, 16777619); } return (h >>> 0).toString(36); };
+  const cols = Object.keys(ledger[0] || {}).slice(5);
+  const members = cols.map((h) => h.replace(/ \(removed\)$/, ''));
+  const seen = new Map();
+  return ledger.map((r) => {
+    const date = r.Date, desc = String(r.Description || '').trim(), cat = r.Category, cost = Number(r.Cost);
+    const net = cols.map((h) => Number(r[h] || 0));
+    const shares = net.map((v) => (v < 0 ? -v : 0));
+    const payers = net.map((v, k) => (v > 0.005 ? k : -1)).filter((k) => k >= 0);
+    const left = cost - shares.reduce((s, v) => s + v, 0);
+    payers.forEach((k) => { shares[k] += left / payers.length; });
+    let setup = setupMap.get(date + '|' + desc);
+    if (!setup && date > REVIEWED_TO && cat !== 'Payment' && SETUP_WORDS.test(desc)) setup = ['Picked by keyword', 'check', 'Looks like something bought for the flat; confirm'];
+    const [group, sub] = setup ? ['Setup assets', setup[0]] : classify(desc, cat);
+    const key = date + '|' + desc + '|' + r2(cost);
+    const n = (seen.get(key) || 0) + 1; seen.set(key, n);
+    const row = {
+      id: 'e' + date.replace(/-/g, '') + '-' + hash(key + '|' + n),
+      date, description: desc, splitwise_category: cat, cost: r2(cost), group, sub,
+      setup: !!setup, confidence: setup ? setup[1] : '', note: setup ? setup[2] : '',
+      paid_by: payers.map((k) => members[k]).join(' + '),
+    };
+    members.forEach((m, k) => { row['share ' + m] = r2(shares[k]); });
+    row.split = members.map((m, k) => [m, r2(shares[k])]).filter(([, s]) => Math.abs(s) > 0.004).map(([m, s]) => m + '=' + s).join('; ');
+    members.forEach((m, k) => { row['net ' + m] = r2(net[k]); });
+    return row;
+  });
+},
+});
+
+dash.calc('members', {
+  title: 'Members',
+  description: 'Everyone in the Splitwise group, and whether they still live in the flat (Splitwise marks people who left as removed).',
+  inputs: ['ledger'],
+  fn: (ledger) => Object.keys(ledger[0] || {}).slice(5).map((h) => ({ member: h.replace(/ \(removed\)$/, ''), current: !/ \(removed\)$/.test(h) }))
+    .sort((a, b) => Number(b.current) - Number(a.current)),
+});
+
+dash.calc('move_out', {
+  title: 'Move-out date',
+  description: 'The date setup items are valued to: the one picked on this page, else the one saved in this browser, else today.',
+  inputs: ['statement'],
+  fn: (statement) => {
+    const ok = (v) => /^\d{4}-\d{2}-\d{2}$/.test(v || '');
+    const saved = (Array.isArray(statement) ? statement : []).map((r) => r.asof).find(ok) || new Date().toISOString().slice(0, 10);
+    const picked = dash.params().asof;
+    return [{ asof: ok(picked) ? picked : saved, saved }];
+  },
+});
+
+dash.calc('tagged', {
+  title: 'Expenses with hand edits',
+  description: 'Every Splitwise row, with any setup tags an editor changed on this page applied.',
+  inputs: ['ledger_rows', 'overrides'],
+  fn: (ledger, overrides) => {
+    const byId = new Map((Array.isArray(overrides) ? overrides : []).map((o) => [o.id, o.setup === true]));
+    return ledger.map((r) => {
+      if (!byId.has(r.id) || byId.get(r.id) === r.setup) return r;
+      const setup = byId.get(r.id);
+      const wasSetup = r.group === 'Setup assets';
+      return { ...r, setup, edited: true,
+        group: setup ? 'Setup assets' : (wasSetup ? 'Other' : r.group),
+        sub: setup ? (wasSetup ? r.sub : 'Added by hand') : (wasSetup ? 'Removed from setup' : r.sub),
+        confidence: setup ? (r.confidence || 'sure') : '' };
+    });
+  },
+});
+
+dash.calc('setup_items', {
+  title: 'Setup items, valued',
+  description: 'Each setup item with its age, value at the chosen valuation and the leaving member’s share.',
+  inputs: ['tagged', 'members', 'move_out'],
+  fn: (tagged, members, moveOut) => {
+    const p = dash.params();
+    const leaver = p.leaver || b71.firstMember();
+    const years = Number(p.dep || 5);
+    const basis = p.basis || 'seat';
+    const seats = members.filter((m) => m.current).length || 4;
+    const withCheck = p.check !== 'no';
+    const asOf = Date.parse(((moveOut && moveOut[0] && moveOut[0].asof) || '2026-11-22') + 'T00:00:00Z');
+    return tagged
+      .filter((r) => r.setup && (withCheck || r.confidence !== 'check'))
+      .map((r) => {
+        const age = Math.max(0, (asOf - Date.parse(r.date)) / (365.25 * 864e5));
+        const factor = years > 0 ? Math.max(0, 1 - age / years) : 1;
+        const value = Math.round(r.cost * factor);
+        const parts = (r.split || '').split('; ').filter(Boolean).length;
+        const share = basis === 'seat' && parts >= seats ? r.cost / seats : Number(r['share ' + leaver] || 0);
+        return { id: r.id, date: r.date, description: r.description, asset_group: r.sub, paid_by: r.paid_by,
+          cost: Math.round(r.cost), age_years: Math.round(age * 10) / 10, value_now: value,
+          leaver_share: Math.round(share), leaver_value: r.cost ? Math.round(value * share / r.cost) : 0,
+          leaver_share_exact: share, leaver_value_exact: r.cost ? value * share / r.cost : 0,
+          confidence: r.confidence, note: r.note, edited: !!r.edited, split: r.split,
+          shared_by: (r.split || '').split('; ').filter(Boolean).map((p) => { const i = p.lastIndexOf('='); return p.slice(0, i).split(' ')[0] + ' ₹' + Math.round(Number(p.slice(i + 1))).toLocaleString('en-IN'); }).join(', ') };
+      })
+      .sort((a, b) => (a.date < b.date ? -1 : 1));
+  },
+});
+
+dash.calc('setup_groups', {
+  title: 'Setup items by type',
+  description: 'Purchase price and value at the chosen valuation for each type of setup item.',
+  inputs: ['setup_items'],
+  fn: (items) => {
+    const m = new Map();
+    for (const r of items) {
+      const g = m.get(r.asset_group) || { asset_group: r.asset_group, items: 0, cost: 0, value_now: 0, leaver_value: 0 };
+      g.items += 1; g.cost += r.cost; g.value_now += r.value_now; g.leaver_value += r.leaver_value_exact;
+      m.set(r.asset_group, g);
+    }
+    return [...m.values()].map((g) => ({ ...g, leaver_value: Math.round(g.leaver_value) })).sort((a, b) => b.cost - a.cost);
+  },
+});
+
+dash.calc('setup_summary', {
+  title: 'Setup totals',
+  description: 'Totals over the setup items, and the leaving member’s share of them.',
+  inputs: ['setup_items'],
+  fn: (items) => [{
+    items: items.length,
+    cost: items.reduce((s, r) => s + r.cost, 0),
+    value_now: items.reduce((s, r) => s + r.value_now, 0),
+    leaver_cost: Math.round(items.reduce((s, r) => s + r.leaver_share_exact, 0)),
+    leaver_value: Math.round(items.reduce((s, r) => s + r.leaver_value_exact, 0)),
+  }],
+});
+
+dash.calc('contributors', {
+  title: 'Who owns a share of the setup items',
+  description: 'Each member’s share of the setup items, from the Splitwise split, at purchase price and at the chosen valuation.',
+  inputs: ['setup_items', 'members'],
+  fn: (items, members) => {
+    const current = members.filter((m) => m.current).map((m) => m.member);
+    const m = new Map();
+    for (const r of items) {
+      for (const part of (r.split || '').split('; ')) {
+        const i = part.lastIndexOf('=');
+        if (i < 1) continue;
+        const name = part.slice(0, i), amt = Number(part.slice(i + 1));
+        const g = m.get(name) || { member: name, status: current.includes(name) ? 'Living here' : 'Moved out', items: 0, share_cost: 0, share_value: 0 };
+        if (amt > 0) g.items += 1;
+        g.share_cost += amt;
+        g.share_value += r.cost ? r.value_now * amt / r.cost : 0;
+        m.set(name, g);
+      }
+    }
+    return [...m.values()].map((g) => ({ ...g, share_cost: Math.round(g.share_cost), share_value: Math.round(g.share_value) }))
+      .sort((a, b) => b.share_cost - a.share_cost);
+  },
+});
+
+dash.calc('spend_groups', {
+  title: 'Spending by category',
+  description: 'Total cost of each category, leaving out settle-ups and payments between flatmates.',
+  inputs: ['tagged'],
+  fn: (tagged) => {
+    const rows = tagged.filter((r) => r.group !== 'Transfers & settlements');
+    const total = rows.reduce((s, r) => s + r.cost, 0);
+    const m = new Map();
+    for (const r of rows) {
+      const g = m.get(r.group) || { group: r.group, expenses: 0, cost: 0 };
+      g.expenses += 1; g.cost += r.cost; m.set(r.group, g);
+    }
+    return [...m.values()].map((g) => ({ ...g, cost: Math.round(g.cost), share_pct: Math.round(g.cost / total * 1000) / 10 }))
+      .sort((a, b) => b.cost - a.cost);
+  },
+});
+
+dash.calc('spend_years', {
+  title: 'Spending by year',
+  description: 'Total cost per calendar year, leaving out settle-ups and payments between flatmates.',
+  inputs: ['tagged'],
+  fn: (tagged) => {
+    const m = new Map();
+    for (const r of tagged) {
+      if (r.group === 'Transfers & settlements') continue;
+      const y = r.date.slice(0, 4);
+      const g = m.get(y) || { year: y, expenses: 0, cost: 0 };
+      g.expenses += 1; g.cost += r.cost; m.set(y, g);
+    }
+    return [...m.values()].map((g) => ({ ...g, cost: Math.round(g.cost) })).sort((a, b) => (a.year < b.year ? -1 : 1));
+  },
+});
+
+dash.calc('kpis', {
+  title: 'Headline totals',
+  description: 'Total spending, number of expenses and setup spending, leaving out settle-ups.',
+  inputs: ['tagged'],
+  fn: (tagged) => {
+    const rows = tagged.filter((r) => r.group !== 'Transfers & settlements');
+    const setup = rows.filter((r) => r.setup);
+    const dates = rows.map((r) => r.date).sort();
+    return [{
+      total_spend: Math.round(rows.reduce((s, r) => s + r.cost, 0)),
+      expenses: rows.length,
+      setup_cost: Math.round(setup.reduce((s, r) => s + r.cost, 0)),
+      setup_items: setup.length,
+      first_date: dates[0] || '',
+      last_date: dates[dates.length - 1] || '',
+      rows: tagged.length,
+      last_entry: tagged.map((r) => r.date).sort().pop() || '',
+    }];
+  },
+});
+
+dash.calc('balances', {
+  title: 'Balances',
+  description: 'Sum of each current member’s net effect across every row, payments included.',
+  inputs: ['ledger_rows', 'members'],
+  fn: (ledger, members) => {
+    const names = members.filter((m) => m.current).map((m) => m.member);
+    return names.map((n) => ({ member: n, balance: Math.round(ledger.reduce((s, r) => s + Number(r['net ' + n] || 0), 0)) }))
+      .sort((a, b) => b.balance - a.balance);
+  },
+});
+
+dash.calc('statement_items', {
+  title: 'Move-out statement items',
+  description: 'Setup items the leaving member had a share in, with that share and what it is worth at the chosen valuation.',
+  inputs: ['setup_items'],
+  fn: (items) => items.filter((r) => r.leaver_share_exact > 0.005).map((r) => ({
+    id: r.id, date: r.date, description: r.description, asset_group: r.asset_group, cost: r.cost,
+    share: Math.round(r.leaver_share_exact), share_pct: r.cost ? Math.round(r.leaver_share_exact / r.cost * 1000) / 10 : 0,
+    age_years: r.age_years, pct_left: r.cost ? Math.round(r.value_now / r.cost * 100) : 0,
+    value_now: r.value_now, buyout: Math.round(r.leaver_value_exact), buyout_exact: r.leaver_value_exact,
+    share_exact: r.leaver_share_exact, confidence: r.confidence, note: r.note,
+  })),
+});
+
+dash.calc('statement_summary', {
+  title: 'Move-out statement totals',
+  description: 'The leaving member’s total share of setup items, the buyout due to them, and their Splitwise balance.',
+  inputs: ['statement_items', 'balances'],
+  fn: (items, balances) => {
+    const leaver = dash.params().leaver || b71.firstMember();
+    const bal = balances.find((b) => b.member === leaver);
+    return [{
+      member: leaver, items: items.length,
+      share_cost: Math.round(items.reduce((s, r) => s + r.share_exact, 0)),
+      buyout: Math.round(items.reduce((s, r) => s + r.buyout_exact, 0)),
+      splitwise_balance: bal ? bal.balance : 0,
+    }];
+  },
+});
+
+dash.calc('statement_years', {
+  title: 'Move-out statement by year bought',
+  description: 'The leaving member’s share and buyout grouped by the year each setup item was bought.',
+  inputs: ['statement_items'],
+  fn: (items) => {
+    const m = new Map();
+    for (const r of items) {
+      const y = r.date.slice(0, 4);
+      const g = m.get(y) || { year: y, items: 0, share: 0, buyout: 0 };
+      g.items += 1; g.share += r.share_exact; g.buyout += r.buyout_exact; m.set(y, g);
+    }
+    return [...m.values()].sort((a, b) => (a.year < b.year ? -1 : 1)).map((g) => ({
+      year: g.year, items: g.items, share: Math.round(g.share), buyout: Math.round(g.buyout),
+      pct_left: g.share ? Math.round(g.buyout / g.share * 100) : 0 }));
+  },
+});
+
+dash.calc('statement_payers', {
+  title: 'Who pays the buyout',
+  description: 'How the buyout is paid: all by the incoming flatmate, or split equally between the members staying.',
+  inputs: ['statement_summary', 'balances'],
+  fn: (summary, balances) => {
+    const p = dash.params();
+    const leaver = p.leaver || b71.firstMember();
+    const total = summary[0] ? summary[0].buyout : 0;
+    if (p.payer !== 'stay') return [{ payer: 'Incoming flatmate', amount: total }];
+    const stay = balances.map((b) => b.member).filter((m) => m !== leaver);
+    if (!stay.length) return [];
+    const each = Math.floor(total / stay.length);
+    return stay.map((m, i) => ({ payer: m, amount: i === stay.length - 1 ? total - each * (stay.length - 1) : each }));
+  },
+});
+
+dash.calc('explorer', {
+  title: 'Expenses matching the filters',
+  description: 'The rows that the search box and filters on this page pick out, newest first.',
+  inputs: ['tagged'],
+  fn: (tagged) => {
+    const p = dash.params();
+    const q = String(p.q || '').trim().toLowerCase();
+    const who = p.who || '';
+    const shareOf = (r) => {
+      if (('share ' + who) in r) return Number(r['share ' + who]);
+      const part = (r.split || '').split('; ').find((s) => s.startsWith(who + '='));
+      return part ? Number(part.slice(who.length + 1)) : 0;
+    };
+    return tagged.filter((r) =>
+      (p.tr === 'show' || r.group !== 'Transfers & settlements') &&
+      (!p.grp || r.group === p.grp) &&
+      (!p.yr || r.date.startsWith(p.yr)) &&
+      (!p.setup || (p.setup === 'yes') === !!r.setup) &&
+      (!q || [r.description, r.group, r.sub, r.splitwise_category, r.paid_by, r.note].join(' ').toLowerCase().includes(q)) &&
+      (!who || shareOf(r) > 0 || (r.paid_by || '').split(' + ').includes(who))
+    ).map((r) => ({
+      id: r.id, date: r.date, description: r.description, category: r.group + ' · ' + r.sub, group: r.group,
+      cost: r.cost, paid_by: r.paid_by, share: who ? Math.round(shareOf(r) * 100) / 100 : null,
+      setup: !!r.setup, edited: !!r.edited, confidence: r.confidence, note: r.note,
+    })).sort((a, b) => (a.date < b.date ? 1 : a.date > b.date ? -1 : (a.id < b.id ? 1 : -1)));
+  },
+});
+
+dash.calc('explorer_total', {
+  title: 'Totals for the filtered expenses',
+  description: 'Count, total cost and the picked person’s share of the expenses that match the filters.',
+  inputs: ['explorer'],
+  fn: (rows) => [{
+    count: rows.length,
+    cost: Math.round(rows.reduce((s, r) => s + r.cost, 0)),
+    share: rows.length && rows[0].share !== null ? Math.round(rows.reduce((s, r) => s + (r.share || 0), 0)) : null,
+  }],
+});
+</script>
+
+<script>
+// ---------- shared helpers ----------
+window.b71 = window.b71 || {};
+b71.inr = (v) => '₹' + new Intl.NumberFormat('en-IN', { maximumFractionDigits: 0 }).format(v);
+b71.inr2 = (v) => '₹' + new Intl.NumberFormat('en-IN', { maximumFractionDigits: 2 }).format(v);
+b71.int = (v) => new Intl.NumberFormat('en-IN').format(v);
+b71.day = (s) => (s ? d3.utcFormat('%d %b %Y')(d3.utcParse('%Y-%m-%d')(s)) : '—');
+b71.limit = 150;
+b71.sort = { key: 'date', dir: -1 };
+
+b71.num = (name, src, field, fmt) => dash.draw(name, (el) => {
+  const d = dash.data(src);
+  el.classList.toggle('dash-skeleton', d.status === 'loading');
+  if (d.status !== 'ok' || !d.data || !d.data.length || d.data[0][field] === null || d.data[0][field] === undefined) { el.textContent = '—'; return; }
+  el.textContent = fmt(d.data[0][field]);
+});
+
+b71.save = async (id, setup) => {
+  const saved = b71.store.setOverride(id, setup);
+  document.querySelectorAll('.b71-unsaved').forEach((p) => { p.hidden = saved; });
+};
+
+b71.failed = (el, d, cols, what) => {
+  const msg = d.status === 'error' ? `Couldn’t load ${what}.` : (d.status === 'loading' ? 'Loading…' : '—');
+  if (cols) {
+    const tr = document.createElement('tr'); const td = document.createElement('td');
+    td.colSpan = cols; td.textContent = msg; td.className = 'b71-muted'; tr.appendChild(td); el.replaceChildren(tr);
+  } else {
+    const p = document.createElement('p'); p.className = 'b71-muted b71-small'; p.textContent = msg; el.replaceChildren(p);
+  }
+};
+
+b71.cell = (tr, text, cls) => { const td = document.createElement('td'); td.textContent = text; if (cls) td.className = cls; tr.appendChild(td); return td; };
+
+b71.tip = (el) => {
+  let tip = el.querySelector(':scope > .b71-tip');
+  if (!tip) { tip = document.createElement('div'); tip.className = 'b71-tip'; tip.hidden = true; el.appendChild(tip); }
+  return {
+    show(ev, lines) {
+      tip.replaceChildren(...lines.map((l, i) => { const div = document.createElement(i ? 'span' : 'div'); div.textContent = l; if (i) { div.style.display = 'block'; } return div; }));
+      tip.hidden = false;
+      const box = el.getBoundingClientRect();
+      const x = Math.min(Math.max(0, ev.clientX - box.left + 12), Math.max(0, box.width - tip.offsetWidth));
+      tip.style.left = x + 'px'; tip.style.top = (ev.clientY - box.top + 14) + 'px';
+    },
+    hide() { tip.hidden = true; },
+  };
+};
+
+// ---------- numbers ----------
+b71.num('k_total', 'kpis', 'total_spend', b71.inr);
+b71.num('k_count', 'kpis', 'expenses', b71.int);
+b71.num('k_first', 'kpis', 'first_date', b71.day);
+b71.num('k_last', 'kpis', 'last_date', b71.day);
+b71.num('k_setup', 'kpis', 'setup_cost', b71.inr);
+b71.num('k_setup_n', 'kpis', 'setup_items', b71.int);
+b71.num('k_rows', 'kpis', 'rows', b71.int);
+b71.num('k_first2', 'kpis', 'first_date', b71.day);
+b71.num('k_last2', 'kpis', 'last_date', b71.day);
+b71.num('k_last3', 'kpis', 'last_entry', b71.day);
+b71.num('k_last4', 'kpis', 'last_entry', b71.day);
+b71.num('mo_saved', 'move_out', 'saved', b71.day);
+
+// selects whose choices come from the data
+dash.draw('leaver_opts', (sel) => {
+  const d = dash.data('members');
+  const list = d.status === 'ok' ? d.data : [];
+  const cur = dash.params().leaver || b71.firstMember();
+  const opts = list.map((m) => new Option(m.member + (m.current ? '' : ' (moved out)'), m.member));
+  if (!list.some((m) => m.member === cur)) opts.unshift(new Option(cur, cur));
+  sel.replaceChildren(...opts);
+  sel.value = cur;
+});
+dash.draw('who_opts', (sel) => {
+  const d = dash.data('members');
+  const list = d.status === 'ok' ? d.data : [];
+  const live = document.createElement('optgroup'); live.label = 'Living here';
+  live.append(...list.filter((m) => m.current).map((m) => new Option(m.member)));
+  const gone = document.createElement('optgroup'); gone.label = 'Moved out';
+  gone.append(...list.filter((m) => !m.current).map((m) => new Option(m.member)));
+  sel.replaceChildren(new Option('Anyone', ''), live, gone);
+  sel.value = dash.params().who || '';
+});
+dash.draw('yr_opts', (sel) => {
+  const d = dash.data('spend_years');
+  const years = d.status === 'ok' ? d.data.map((r) => String(r.year)) : [];
+  sel.replaceChildren(new Option('All years', ''), ...years.map((y) => new Option(y)));
+  sel.value = dash.params().yr || '';
+});
+b71.num('s_items', 'setup_summary', 'items', b71.int);
+b71.num('s_cost', 'setup_summary', 'cost', b71.inr);
+b71.num('s_value', 'setup_summary', 'value_now', b71.inr);
+b71.num('s_leaver_value', 'setup_summary', 'leaver_value', b71.inr);
+b71.num('s_leaver_cost', 'setup_summary', 'leaver_cost', b71.inr);
+b71.num('x_count', 'explorer_total', 'count', b71.int);
+b71.num('x_cost', 'explorer_total', 'cost', b71.inr);
+b71.num('x_share', 'explorer_total', 'share', b71.inr);
+dash.draw('leaver_name', (el) => { el.textContent = dash.params().leaver || b71.firstMember(); });
+
+// ---------- charts ----------
+dash.draw('setup_groups_chart', (el) => {
+  const d = dash.data('setup_groups');
+  if (d.status !== 'ok') return b71.failed(el, d, 0, 'the setup items');
+  if (!d.data.length) return b71.failed(el, { status: 'empty' }, 0, '');
+  const tip = b71.tip(el);
+  const max = d3.max(d.data, (r) => r.cost) || 1;
+  const wrap = document.createElement('div'); wrap.className = 'b71-bars';
+  for (const r of d.data) {
+    const row = document.createElement('div'); row.className = 'b71-bar'; row.tabIndex = 0;
+    const lab = document.createElement('span'); lab.className = 'b71-bl'; lab.textContent = r.asset_group;
+    const track = document.createElement('div'); track.className = 'b71-track';
+    const full = document.createElement('div'); full.className = 'b71-fill'; full.style.width = (r.cost / max * 100) + '%'; full.style.background = 'var(--cds-chart-muted)';
+    const now = document.createElement('div'); now.className = 'b71-fill'; now.style.width = (r.value_now / max * 100) + '%'; now.style.background = dash.colors[0];
+    const val = document.createElement('span'); val.className = 'b71-val';
+    val.textContent = r.value_now === r.cost ? b71.inr(r.cost) : `${b71.inr(r.cost)} → ${b71.inr(r.value_now)}`;
+    track.append(full, now, val); row.append(lab, track);
+    const lines = [r.asset_group, `${r.items} item${r.items === 1 ? '' : 's'}`, `Purchase price ${b71.inr(r.cost)}`, `At valuation ${b71.inr(r.value_now)}`, `Leaver’s share now ${b71.inr(r.leaver_value)}`];
+    row.addEventListener('mousemove', (ev) => tip.show(ev, lines));
+    row.addEventListener('mouseleave', () => tip.hide());
+    row.addEventListener('click', () => { dash.setParams({ setup: 'yes', grp: null, q: r.asset_group === 'Added by hand' ? null : r.asset_group }); document.getElementById('expenses')?.scrollIntoView({ behavior: 'smooth' }); });
+    wrap.appendChild(row);
+  }
+  el.replaceChildren(wrap, el.querySelector(':scope > .b71-tip') || document.createElement('span'));
+});
+
+dash.draw('groups_chart', (el) => {
+  const d = dash.data('spend_groups');
+  if (d.status !== 'ok') return b71.failed(el, d, 0, 'spending');
+  const tip = b71.tip(el);
+  const max = d3.max(d.data, (r) => r.cost) || 1;
+  const wrap = document.createElement('div'); wrap.className = 'b71-bars';
+  for (const r of d.data) {
+    const row = document.createElement('div'); row.className = 'b71-bar'; row.tabIndex = 0;
+    const lab = document.createElement('span'); lab.className = 'b71-bl'; lab.textContent = r.group;
+    const track = document.createElement('div'); track.className = 'b71-track';
+    const fill = document.createElement('div'); fill.className = 'b71-fill'; fill.style.width = (r.cost / max * 100) + '%';
+    fill.style.background = r.group === 'Setup assets' ? dash.colors[1] : dash.colors[0];
+    const val = document.createElement('span'); val.className = 'b71-val'; val.textContent = `${b71.inr(r.cost)} · ${r.share_pct}%`;
+    track.append(fill, val); row.append(lab, track);
+    const lines = [r.group, `${b71.int(r.expenses)} expenses`, `${b71.inr(r.cost)} (${r.share_pct}% of spending)`];
+    row.addEventListener('mousemove', (ev) => tip.show(ev, lines));
+    row.addEventListener('mouseleave', () => tip.hide());
+    const go = () => { dash.setParams({ grp: r.group }); document.getElementById('expenses')?.scrollIntoView({ behavior: 'smooth' }); };
+    row.addEventListener('click', go);
+    row.addEventListener('keydown', (ev) => { if (ev.key === 'Enter') go(); });
+    wrap.appendChild(row);
+  }
+  el.replaceChildren(wrap, el.querySelector(':scope > .b71-tip') || document.createElement('span'));
+});
+
+dash.draw('years_chart', (el) => {
+  const d = dash.data('spend_years');
+  if (d.status !== 'ok') return b71.failed(el, d, 0, 'spending');
+  const tip = b71.tip(el);
+  const max = d3.max(d.data, (r) => r.cost) || 1;
+  const wrap = document.createElement('div'); wrap.className = 'b71-cols';
+  for (const r of d.data) {
+    const col = document.createElement('div'); col.className = 'b71-col'; col.tabIndex = 0;
+    const v = document.createElement('span'); v.className = 'b71-cv'; v.textContent = '₹' + (r.cost / 1e5).toFixed(1) + 'L';
+    const bar = document.createElement('div'); bar.className = 'b71-colbar'; bar.style.height = Math.max(2, r.cost / max * 120) + 'px'; bar.style.background = dash.colors[0];
+    const y = document.createElement('span'); y.textContent = r.year;
+    col.append(v, bar, y);
+    const lines = [r.year, `${b71.int(r.expenses)} expenses`, b71.inr(r.cost)];
+    col.addEventListener('mousemove', (ev) => tip.show(ev, lines));
+    col.addEventListener('mouseleave', () => tip.hide());
+    const go = () => { dash.setParams({ yr: r.year }); document.getElementById('expenses')?.scrollIntoView({ behavior: 'smooth' }); };
+    col.addEventListener('click', go);
+    col.addEventListener('keydown', (ev) => { if (ev.key === 'Enter') go(); });
+    wrap.appendChild(col);
+  }
+  el.replaceChildren(wrap, el.querySelector(':scope > .b71-tip') || document.createElement('span'));
+});
+
+// ---------- tables ----------
+dash.draw('contrib_rows', (el) => {
+  const d = dash.data('contributors');
+  if (d.status !== 'ok') return b71.failed(el, d, 5, 'contributions');
+  el.replaceChildren(...d.data.map((r) => {
+    const tr = document.createElement('tr');
+    b71.cell(tr, r.member); b71.cell(tr, r.status, r.status === 'Moved out' ? 'b71-muted' : '');
+    b71.cell(tr, String(r.items), 'n'); b71.cell(tr, b71.inr(r.share_cost), 'n'); b71.cell(tr, b71.inr(r.share_value), 'n');
+    return tr;
+  }));
+});
+
+dash.draw('balance_rows', (el) => {
+  const d = dash.data('balances');
+  if (d.status !== 'ok') return b71.failed(el, d, 2, 'balances');
+  el.replaceChildren(...d.data.map((r) => {
+    const tr = document.createElement('tr');
+    b71.cell(tr, r.member);
+    b71.cell(tr, (r.balance > 0 ? '+' : '') + b71.inr(r.balance).replace('₹-', '−₹'), 'n ' + (r.balance > 0 ? 'b71-pos' : r.balance < 0 ? 'b71-neg' : ''));
+    return tr;
+  }));
+});
+
+b71.setupBox = (r) => {
+  const td = document.createElement('td');
+  const box = document.createElement('input'); box.type = 'checkbox'; box.checked = !!r.setup;
+  box.setAttribute('aria-label', 'Count “' + r.description + '” as a setup item');
+  box.addEventListener('change', () => b71.save(r.id, box.checked));
+  td.appendChild(box);
+  return td;
+};
+
+b71.flag = (td, r) => {
+  if (r.confidence) { const s = document.createElement('span'); s.className = 'b71-pill ' + r.confidence; s.textContent = r.confidence; td.appendChild(s); }
+  if (r.edited) { const s = document.createElement('span'); s.className = 'b71-pill edited'; s.textContent = 'edited'; td.append(' ', s); }
+};
+
+dash.draw('setup_rows', (el) => {
+  const d = dash.data('setup_items');
+  if (d.status !== 'ok') return b71.failed(el, d, 11, 'the setup items');
+  if (!d.data.length) return b71.failed(el, { status: 'empty' }, 11, '');
+  el.replaceChildren(...d.data.map((r) => {
+    const tr = document.createElement('tr');
+    b71.cell(tr, b71.day(r.date));
+    const td = b71.cell(tr, r.description, 'desc');
+    if (r.note) { const n = document.createElement('small'); n.className = 'b71-note'; n.textContent = r.note; td.appendChild(n); }
+    b71.cell(tr, r.asset_group);
+    const sb = b71.cell(tr, r.shared_by, 'desc');
+    if (r.paid_by) { const n = document.createElement('small'); n.className = 'b71-note'; n.textContent = 'paid upfront by ' + r.paid_by; sb.appendChild(n); }
+    b71.cell(tr, b71.inr(r.cost), 'n'); b71.cell(tr, r.age_years.toFixed(1), 'n'); b71.cell(tr, b71.inr(r.value_now), 'n');
+    b71.cell(tr, b71.inr(r.leaver_share), 'n'); b71.cell(tr, b71.inr(r.leaver_value), 'n');
+    b71.flag(b71.cell(tr, ''), r);
+    tr.appendChild(b71.setupBox({ ...r, setup: true }));
+    return tr;
+  }));
+});
+
+dash.draw('x_rows', (el) => {
+  const d = dash.data('explorer');
+  const more = document.getElementById('b71-showmore');
+  if (d.status !== 'ok') { if (more) more.hidden = true; return b71.failed(el, d, 7, 'the expenses'); }
+  if (!d.data.length) {
+    if (more) more.hidden = true;
+    const tr = document.createElement('tr');
+    const td = b71.cell(tr, 'No expenses match these filters.', 'b71-muted'); td.colSpan = 7;
+    el.replaceChildren(tr);
+    return;
+  }
+  const { key, dir } = b71.sort;
+  const rows = d.data.slice().sort((a, b) => (a[key] < b[key] ? -dir : a[key] > b[key] ? dir : 0));
+  const shown = rows.slice(0, b71.limit);
+  el.replaceChildren(...shown.map((r) => {
+    const tr = document.createElement('tr'); tr.dataset.key = r.id;
+    b71.cell(tr, b71.day(r.date));
+    const td = b71.cell(tr, r.description, 'desc');
+    if (r.confidence || r.edited) { td.append(' '); b71.flag(td, r); }
+    b71.cell(tr, r.category); b71.cell(tr, r.paid_by || '—');
+    b71.cell(tr, b71.inr2(r.cost), 'n');
+    b71.cell(tr, r.share === null ? '—' : b71.inr2(r.share), 'n');
+    tr.appendChild(b71.setupBox(r));
+    return tr;
+  }));
+  if (more) more.hidden = rows.length <= b71.limit;
+});
+
+dash.draw('x_shown', (el) => {
+  const d = dash.data('explorer');
+  if (d.status !== 'ok') { el.textContent = '—'; return; }
+  el.textContent = `${b71.int(Math.min(b71.limit, d.data.length))} of ${b71.int(d.data.length)}`;
+});
+
+// ---------- move-out statement ----------
+dash.draw('stmt_name', (el) => { el.textContent = dash.params().leaver || b71.firstMember(); });
+b71.num('st_items', 'statement_summary', 'items', b71.int);
+b71.num('st_paid', 'statement_summary', 'share_cost', b71.inr);
+b71.num('st_due', 'statement_summary', 'buyout', b71.inr);
+b71.num('st_bal', 'statement_summary', 'splitwise_balance', (v) => (v > 0 ? '+' : v < 0 ? '−' : '') + b71.inr(Math.abs(v)));
+
+dash.draw('stmt_year_rows', (el) => {
+  const d = dash.data('statement_years');
+  if (d.status !== 'ok') return b71.failed(el, d, 5, 'the years');
+  el.replaceChildren(...d.data.map((r) => {
+    const tr = document.createElement('tr');
+    b71.cell(tr, r.year); b71.cell(tr, String(r.items), 'n'); b71.cell(tr, b71.inr(r.share), 'n');
+    b71.cell(tr, r.pct_left + '%', 'n'); b71.cell(tr, b71.inr(r.buyout), 'n');
+    return tr;
+  }));
+});
+
+dash.draw('stmt_pay_rows', (el) => {
+  const d = dash.data('statement_payers');
+  if (d.status !== 'ok') return b71.failed(el, d, 2, 'the payers');
+  el.replaceChildren(...d.data.map((r) => {
+    const tr = document.createElement('tr');
+    b71.cell(tr, r.payer); b71.cell(tr, b71.inr(r.amount), 'n');
+    return tr;
+  }));
+});
+
+dash.draw('stmt_rows', (el) => {
+  const d = dash.data('statement_items');
+  if (d.status !== 'ok') return b71.failed(el, d, 11, 'the statement');
+  if (!d.data.length) return b71.failed(el, { status: 'empty' }, 11, '');
+  el.replaceChildren(...d.data.map((r) => {
+    const tr = document.createElement('tr');
+    b71.cell(tr, b71.day(r.date));
+    const td = b71.cell(tr, r.description, 'desc');
+    if (r.note) { const n = document.createElement('small'); n.className = 'b71-note'; n.textContent = r.note; td.appendChild(n); }
+    b71.cell(tr, r.asset_group);
+    b71.cell(tr, b71.inr(r.cost), 'n'); b71.cell(tr, b71.inr(r.share), 'n'); b71.cell(tr, r.share_pct + '%', 'n'); b71.cell(tr, r.age_years.toFixed(1), 'n'); b71.cell(tr, r.pct_left + '%', 'n');
+    b71.cell(tr, b71.inr(r.value_now), 'n'); b71.cell(tr, b71.inr(r.buyout), 'n');
+    b71.flag(b71.cell(tr, ''), r);
+    return tr;
+  }));
+});
+
+dash.draw('stmt_foot', (el) => {
+  const d = dash.data('statement_summary');
+  if (d.status !== 'ok' || !d.data.length) { el.replaceChildren(); return; }
+  const s = d.data[0];
+  const tr = document.createElement('tr');
+  const t = b71.cell(tr, 'Total'); t.colSpan = 4;
+  b71.cell(tr, b71.inr(s.share_cost), 'n'); b71.cell(tr, ''); b71.cell(tr, ''); b71.cell(tr, ''); b71.cell(tr, '');
+  b71.cell(tr, b71.inr(s.buyout), 'n'); b71.cell(tr, '');
+  el.replaceChildren(tr);
+});
+
+dash.draw('stmt_message', (el) => {
+  const s = dash.data('statement_summary'), items = dash.data('statement_items'), pay = dash.data('statement_payers'), yrs = dash.data('statement_years'), mo = dash.data('move_out');
+  if (s.status !== 'ok' || items.status !== 'ok' || pay.status !== 'ok' || !s.data.length) { el.value = ''; return; }
+  const p = dash.params(), x = s.data[0];
+  const val = { '0': 'at purchase price', '3': 'depreciated straight-line over 3 years', '5': 'depreciated straight-line over 5 years', '8': 'depreciated straight-line over 8 years' }[p.dep || '5'];
+  const lines = [
+    'Move-out: setup items for ' + x.member,
+    '',
+    x.member + ' has a share in ' + x.items + ' setup items (' + b71.inr(x.share_cost) + ' at purchase, counted ' + (p.basis === 'split' ? 'by the original Splitwise split' : 'by seat, an equal part of everything the flat split, as earlier leavers were bought out') + '). Each item valued ' + val + ' from the date it was bought to ' + b71.day(mo.status === 'ok' && mo.data[0] ? mo.data[0].asof : '2026-11-22') + (p.check === 'no' ? ', leaving out uncertain items' : '') + ', the buyout is ' + b71.inr(x.buyout) + '.',
+    '',
+    'Who pays:',
+    ...pay.data.map((r) => '- ' + r.payer + ': ' + b71.inr(r.amount)),
+    '',
+    ...(yrs.status === 'ok' ? ['By year bought:', ...yrs.data.map((r) => '- ' + r.year + ': ' + r.items + ' items, share ' + b71.inr(r.share) + ', ' + r.pct_left + '% left, buyout ' + b71.inr(r.buyout)), ''] : []),
+    'Items:',
+    ...items.data.map((r) => '- ' + b71.day(r.date) + ' ' + r.description + ': share ' + b71.inr(r.share) + ', ' + r.pct_left + '% value left, buyout ' + b71.inr(r.buyout) + (r.confidence === 'check' ? ' (to confirm)' : '')),
+    '',
+    'Splitwise balance, settled separately: ' + (x.splitwise_balance >= 0 ? '+' : '−') + b71.inr(Math.abs(x.splitwise_balance)) + '.',
+  ];
+  el.value = lines.join('\n');
+});
+
+// ---------- controls ----------
+b71.controls = { 'b71-leaver': 'leaver', 'b71-dep': 'dep', 'b71-check': 'check', 'b71-grp': 'grp', 'b71-yr': 'yr', 'b71-who': 'who', 'b71-setupf': 'setup', 'b71-tr': 'tr', 'b71-payer': 'payer', 'b71-basis': 'basis', 'b71-asof': 'asof' };
+b71.defaults = { leaver: '', dep: '5', check: 'yes', tr: 'hide', payer: 'incoming', basis: 'seat' };
+b71.optionSelects = ['b71-leaver', 'b71-who', 'b71-yr'];
+Object.entries(b71.controls).forEach(([id, name]) => {
+  document.querySelectorAll('#' + id).forEach((sel) => sel.addEventListener('change', () => {
+    if (sel.type === 'date' && !(sel.value && sel.validity.valid)) return;
+    b71.limit = 150;
+    dash.setParams({ [name]: sel.value || null });
+  }));
+});
+let b71Timer;
+document.querySelectorAll('#b71-q').forEach((inp) => inp.addEventListener('input', () => {
+  clearTimeout(b71Timer);
+  b71Timer = setTimeout(() => { b71.limit = 150; dash.setParams({ q: inp.value.trim() || null }); }, 200);
+}));
+document.querySelectorAll('#b71-reset').forEach((btn) => btn.addEventListener('click', () => {
+  b71.limit = 150;
+  document.querySelectorAll('#b71-q').forEach((inp) => { inp.value = ''; });
+  dash.setParams({ q: null, grp: null, yr: null, who: null, setup: null, tr: null });
+}));
+document.querySelectorAll('#b71-showmore').forEach((btn) => btn.addEventListener('click', () => {
+  b71.limit += 150; dash.draw('x_rows'); dash.draw('x_shown');
+}));
+document.querySelectorAll('.b71-sortbtn').forEach((btn) => btn.addEventListener('click', () => {
+  const key = btn.dataset.sort;
+  b71.sort = { key, dir: b71.sort.key === key ? -b71.sort.dir : -1 };
+  dash.draw('x_rows');
+}));
+dash.onData(() => {
+  const p = dash.params();
+  Object.entries(b71.controls).forEach(([id, name]) => {
+    if (b71.optionSelects.includes(id)) return;
+    document.querySelectorAll('#' + id).forEach((sel) => {
+      if (document.activeElement === sel) return;
+      const mo = dash.data('move_out');
+      const v = name === 'asof' ? (mo.status === 'ok' && mo.data[0] ? mo.data[0].asof : '') : (p[name] ?? b71.defaults[name] ?? '');
+      if (sel.value !== v) sel.value = v;
+    });
+  });
+  document.querySelectorAll('#b71-q').forEach((inp) => {
+    if (document.activeElement !== inp && inp.value !== (p.q || '')) inp.value = p.q || '';
+  });
+});
+// ---------- this browser: load an export, keep edits and the move-out date ----------
+b71.show = (id, on) => document.querySelectorAll('#' + id).forEach((el) => { el.hidden = !on; });
+b71.show('b71-asof-save', true);
+b71.useFile = (text, name) => {
+  dash.load('ledger', text);
+  b71.show('b71-has-data', true); b71.show('b71-no-data', false); b71.show('b71-forget', true);
+  const n = document.getElementById('b71-file-name'); if (n) n.textContent = name || 'the Splitwise export';
+  document.querySelectorAll('[data-needs-data]').forEach((el) => { el.hidden = false; });
+};
+document.querySelectorAll('#b71-file').forEach((inp) => inp.addEventListener('change', async () => {
+  const file = inp.files && inp.files[0];
+  if (!file) return;
+  ['b71-up-done', 'b71-up-bad', 'b71-up-fail'].forEach((id) => b71.show(id, false));
+  const text = await file.text();
+  if (!/^\uFEFF?Date,Description,Category,Cost,Currency,/.test(text)) { b71.show('b71-up-bad', true); inp.value = ''; return; }
+  try { b71.useFile(text, file.name); } catch (e) { b71.show('b71-up-bad', true); inp.value = ''; return; }
+  b71.show(b71.store.setFile(text, file.name) ? 'b71-up-done' : 'b71-up-fail', true);
+  inp.value = '';
+}));
+document.querySelectorAll('#b71-forget').forEach((btn) => btn.addEventListener('click', () => {
+  b71.store.clearFile();
+  location.reload();
+}));
+document.querySelectorAll('#b71-asof-save').forEach((btn) => btn.addEventListener('click', () => {
+  const inp = document.getElementById('b71-asof');
+  if (!inp || !(inp.value && inp.validity.valid)) return;
+  const saved = b71.store.setAsof(inp.value);
+  if (saved) { dash.setRows('statement', [{ asof: inp.value }]); dash.setParams({ asof: null }); }
+  b71.show('b71-asof-fail', !saved);
+}));
+dash.setRows('overrides', b71.store.overrides());
+dash.setRows('statement', b71.store.asof() ? [{ asof: b71.store.asof() }] : []);
+{
+  const f = b71.store.file();
+  if (f) { try { b71.useFile(f.text, f.name); } catch (e) { b71.store.clearFile(); } }
+}
+</script>
+
+<footer class="site-foot">Runs entirely in your browser: the Splitwise file, your edits and your move-out date stay on this device. <a href="https://github.com/pranjalg8/splitwise-dashboard">Source on GitHub</a>.</footer>
+</main>
+</body>
+</html>
